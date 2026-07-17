@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Dashboard - iGaming</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-auth-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; }
+        .header { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 24px; position: sticky; top: 0; z-index: 40; }
+        .header-content { max-width: 1600px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 20px; font-weight: 700; color: #1e293b; }
+        .logo span { color: #3b82f6; }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .btn { padding: 10px 16px; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #e2e8f0; color: #334155; }
+        .btn-secondary:hover { background: #cbd5e1; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .main { max-width: 1600px; margin: 0 auto; padding: 24px; }
+        .kanban-column { min-height: 600px; background: #f8fafc; border-radius: 8px; padding: 16px; border: 2px solid #e2e8f0; overflow-y: auto; }
+        .card { background: white; border-radius: 8px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: grab; border-left: 4px solid #3b82f6; transition: all 0.2s; }
+        .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+        .card:active { cursor: grabbing; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; border-radius: 12px; width: 90%; max-width: 700px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .modal-header { padding: 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { padding: 24px; }
+        .input-group { margin-bottom: 16px; }
+        .input-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #334155; }
+        .input-group input, .input-group select, .input-group textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+        .input-group input:focus, .input-group select:focus, .input-group textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .checkbox-group { display: flex; gap: 16px; flex-wrap: wrap; }
+        .checkbox-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+        .modal-footer { padding: 24px; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: flex-end; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+        .tab-button { padding: 12px 20px; border: none; background: transparent; cursor: pointer; font-weight: 500; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab-button.active { border-bottom-color: #3b82f6; color: #3b82f6; }
+        .nav-tabs { display: flex; gap: 0; border-bottom: 1px solid #e2e8f0; }
+        .filter-bar { background: white; padding: 16px; border-radius: 8px; margin-bottom: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+        .chart-container { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+        .alert-success { background: #d1fae5; color: #065f46; }
+        .alert-error { background: #fee2e2; color: #991b1b; }
+        @media (max-width: 768px) {
+            .grid-5 { grid-template-columns: 1fr; }
+            .grid-2 { grid-template-columns: 1fr; }
+            .modal-content { width: 95%; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">CRM <span>iGaming</span></div>
+            <div class="user-info">
+                <span id="user-name" style="font-size: 14px; color: #64748b;">Carregando...</span>
+                <button id="login-btn" class="btn btn-primary">Login Google</button>
+                <button id="logout-btn" class="btn btn-secondary" style="display:none;">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <div style="background: white; border-bottom: 1px solid #e2e8f0;">
+        <div class="header-content">
+            <div class="nav-tabs">
+                <button class="tab-button active" onclick="switchTab('planejamento')">📋 Planejamento</button>
+                <button class="tab-button" onclick="switchTab('analise')">📊 Análise</button>
+                <button class="tab-button" onclick="switchTab('performance')">📈 Performance</button>
+                <button class="tab-button" onclick="switchTab('inventario')">📦 Inventário</button>
+            </div>
+        </div>
+    </div>
+
+    <main class="main">
+        <!-- TAB: PLANEJAMENTO -->
+        <section id="tab-planejamento" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 24px; font-weight: 700; color: #1e293b;">Planejamento & Calendário</h2>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-success" onclick="openModal('planejamento')">+ Nova Campanha</button>
+                    <button class="btn btn-secondary" onclick="exportToCSV()">📥 Exportar CSV</button>
+                </div>
+            </div>
+
+            <div class="filter-bar">
+                <input type="text" id="filter-titulo" placeholder="Filtrar por título..." style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; flex: 1; max-width: 300px;">
+                <select id="filter-responsavel" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                    <option value="">Todos os responsáveis</option>
+                    <option value="Emerson">Emerson</option>
+                    <option value="Matheus">Matheus</option>
+                    <option value="Davi">Davi</option>
+                </select>
+                <select id="filter-canal" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                    <option value="">Todos os canais</option>
+                    <option value="SMS">SMS</option>
+                    <option value="RCS">RCS</option>
+                    <option value="Call">Call</option>
+                    <option value="Email">Email</option>
+                </select>
+                <button class="btn btn-secondary" onclick="applyFilters()">🔍 Filtrar</button>
+                <button class="btn btn-secondary" onclick="clearFilters()">✕ Limpar</button>
+            </div>
+
+            <div class="grid-5">
+                <div class="kanban-column" data-status="ideias" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <h3 style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 16px; text-transform: uppercase;">💡 Ideias</h3>
+                    <div class="cards-container"></div>
+                </div>
+                <div class="kanban-column" data-status="planejamento" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <h3 style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 16px; text-transform: uppercase;">📅 Planejamento</h3>
+                    <div class="cards-container"></div>
+                </div>
+                <div class="kanban-column" data-status="preparacao" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <h3 style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 16px; text-transform: uppercase;">⚙️ Em Preparação</h3>
+                    <div class="cards-container"></div>
+                </div>
+                <div class="kanban-column" data-status="pronto" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <h3 style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 16px; text-transform: uppercase;">✅ Pronto</h3>
+                    <div class="cards-container"></div>
+                </div>
+                <div class="kanban-column" data-status="ativo" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <h3 style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 16px; text-transform: uppercase;">🚀 Ativo</h3>
+                    <div class="cards-container"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: ANÁLISE -->
+        <section id="tab-analise" class="tab-content" style="display:none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 24px; font-weight: 700; color: #1e293b;">Análise & Aprendizados</h2>
+                <button class="btn btn-success" onclick="openModal('analise')">+ Nova Análise</button>
+            </div>
+            <div class="grid-2">
+                <div class="kanban-column" data-status="analise" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <h3 style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 16px; text-transform: uppercase;">🔍 Em Análise</h3>
+                    <div class="cards-container"></div>
+                </div>
+                <div class="kanban-column" data-status="insights" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <h3 style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 16px; text-transform: uppercase;">💡 Insights</h3>
+                    <div class="cards-container"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: PERFORMANCE -->
+        <section id="tab-performance" class="tab-content" style="display:none;">
+            <h2 style="font-size: 24px; font-weight: 700; color: #1e293b; margin-bottom: 24px;">Gráficos de Performance</h2>
+            
+            <div class="grid-2">
+                <div class="chart-container">
+                    <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px;">Campanhas por Status</h3>
+                    <canvas id="chartStatus"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px;">Campanhas por Canal</h3>
+                    <canvas id="chartCanal"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px;">Campanhas por Responsável</h3>
+                <canvas id="chartResponsavel"></canvas>
+            </div>
+        </section>
+
+        <!-- TAB: INVENTÁRIO -->
+        <section id="tab-inventario" class="tab-content" style="display:none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 24px; font-weight: 700; color: #1e293b;">Ofertas & Segmentos</h2>
+                <button class="btn btn-success" onclick="openModal('inventario')">+ Novo Item</button>
+            </div>
+            <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead style="background: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+                        <tr>
+                            <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; color: #475569;">Nome</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; color: #475569;">Tipo</th>
+                            <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; color: #475569;">Status</th>
+                            <th style="padding: 12px; text-align: center; font-weight: 600; font-size: 13px; color: #475569;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventario-table">
+                        <tr><td colspan="4" style="padding: 40px; text-align: center; color: #94a3b8;">Nenhum item cadastrado</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title" style="font-size: 18px; font-weight: 700; color: #1e293b;">Novo Item</h3>
+                <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #94a3b8;">×</button>
+            </div>
+            <div id="alert-msg" class="alert" style="display: none; margin: 16px;"></div>
+            <form id="modal-form" class="modal-body">
+                <div id="fields-planejamento">
+                    <div class="input-group">
+                        <label>Título da Campanha *</label>
+                        <input type="text" id="f-titulo" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Descrição</label>
+                        <textarea id="f-descricao" rows="3"></textarea>
+                    </div>
+                    <div class="grid-2">
+                        <div class="input-group">
+                            <label>Responsável</label>
+                            <select id="f-responsavel">
+                                <option>Emerson</option>
+                                <option>Matheus</option>
+                                <option>Davi</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Canal</label>
+                            <select id="f-canal">
+                                <option>SMS</option>
+                                <option>RCS</option>
+                                <option>Call</option>
+                                <option>Email</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="input-group">
+                            <label>Segmento</label>
+                            <input type="text" id="f-segmento">
+                        </div>
+                        <div class="input-group">
+                            <label>Oferta</label>
+                            <input type="text" id="f-oferta">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>Data de Disparo</label>
+                        <input type="datetime-local" id="f-data-disparo">
+                    </div>
+                    <div class="input-group">
+                        <label>Validação</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="v-segmento"> Segmento ✓</label>
+                            <label><input type="checkbox" id="v-copy"> Copy ✓</label>
+                            <label><input type="checkbox" id="v-oferta"> Oferta ✓</label>
+                            <label><input type="checkbox" id="v-triggers"> Triggers ✓</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fields-analise" style="display:none;">
+                    <div class="input-group">
+                        <label>Campanha Analisada *</label>
+                        <input type="text" id="f-campanha-analise" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Resultado</label>
+                        <textarea id="f-resultado-analise" rows="3"></textarea>
+                    </div>
+                    <div class="input-group">
+                        <label>Por que funcionou?</label>
+                        <textarea id="f-motivo-analise" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div id="fields-inventario" style="display:none;">
+                    <div class="input-group">
+                        <label>Nome *</label>
+                        <input type="text" id="f-nome-inventario" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Tipo</label>
+                        <select id="f-tipo-inventario">
+                            <option>Oferta</option>
+                            <option>Segmento</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Status</label>
+                        <select id="f-status-inventario">
+                            <option>Ativo</option>
+                            <option>Pausado</option>
+                            <option>Arquivado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarCampanha()">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ✅ CONFIGURAÇÃO FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyB0MxpxV2k5bglqKVyZUNhz_fnVMMx-oIk",
+            authDomain: "crm-igaming-dashboard.firebaseapp.com",
+            databaseURL: "https://crm-igaming-dashboard-default-rtdb.firebaseio.com",
+            projectId: "crm-igaming-dashboard",
+            storageBucket: "crm-igaming-dashboard.firebasestorage.app",
+            messagingSenderId: "946493570212",
+            appId: "1:946493570212:web:d0c512c97b02c53ac93a31",
+            measurementId: "G-0EW49PS0P3"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let currentModalType = 'planejamento';
+        let allData = [];
+        let charts = {};
+
+        // ===== AUTENTICAÇÃO =====
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('user-name').textContent = user.displayName || user.email;
+                document.getElementById('login-btn').style.display = 'none';
+                document.getElementById('logout-btn').style.display = 'block';
+                loadData();
+            } else {
+                document.getElementById('user-name').textContent = 'Não autenticado';
+                document.getElementById('login-btn').style.display = 'block';
+                document.getElementById('logout-btn').style.display = 'none';
+            }
+        });
+
+        document.getElementById('login-btn').onclick = () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(err => console.error('Erro:', err));
+        };
+
+        document.getElementById('logout-btn').onclick = () => auth.signOut();
+
+        // ===== NAVEGAÇÃO =====
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.getElementById('tab-' + tab).style.display = 'block';
+            document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (tab === 'performance') {
+                setTimeout(() => renderCharts(), 100);
+            }
+        }
+
+        // ===== MODAL =====
+        function openModal(type) {
+            if (!auth.currentUser) {
+                alert('Faça login primeiro');
+                return;
+            }
+            currentModalType = type;
+            document.getElementById('fields-planejamento').style.display = 'none';
+            document.getElementById('fields-analise').style.display = 'none';
+            document.getElementById('fields-inventario').style.display = 'none';
+            document.getElementById('fields-' + type).style.display = 'block';
+            document.getElementById('modal-title').textContent = type === 'planejamento' ? 'Nova Campanha' : type === 'analise' ? 'Nova Análise' : 'Novo Item';
+            document.getElementById('modal').classList.add('active');
+            document.getElementById('alert-msg').style.display = 'none';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+            document.getElementById('modal-form').reset();
+        }
+
+        // ===== SALVAR DADOS (CORRIGIDO - FUNÇÃO SEPARADA) =====
+        function salvarCampanha() {
+            if (!auth.currentUser) {
+                showAlert('Você precisa estar autenticado', 'error');
+                return;
+            }
+
+            let data = {
+                criado_em: new Date(),
+                criado_por: auth.currentUser.displayName || auth.currentUser.email,
+                tipo: currentModalType
+            };
+
+            try {
+                if (currentModalType === 'planejamento') {
+                    const titulo = document.getElementById('f-titulo').value.trim();
+                    if (!titulo) {
+                        showAlert('Título é obrigatório', 'error');
+                        return;
+                    }
+
+                    data = {
+                        ...data,
+                        titulo: titulo,
+                        descricao: document.getElementById('f-descricao').value,
+                        responsavel: document.getElementById('f-responsavel').value,
+                        canal: document.getElementById('f-canal').value,
+                        segmento: document.getElementById('f-segmento').value,
+                        oferta: document.getElementById('f-oferta').value,
+                        data_disparo: document.getElementById('f-data-disparo').value,
+                        validacao: [
+                            document.getElementById('v-segmento').checked ? 'Segmento' : null,
+                            document.getElementById('v-copy').checked ? 'Copy' : null,
+                            document.getElementById('v-oferta').checked ? 'Oferta' : null,
+                            document.getElementById('v-triggers').checked ? 'Triggers' : null
+                        ].filter(Boolean),
+                        status: 'ideias'
+                    };
+                } else if (currentModalType === 'analise') {
+                    const campanha = document.getElementById('f-campanha-analise').value.trim();
+                    if (!campanha) {
+                        showAlert('Campanha é obrigatória', 'error');
+                        return;
+                    }
+
+                    data = {
+                        ...data,
+                        campanha: campanha,
+                        resultado: document.getElementById('f-resultado-analise').value,
+                        motivo: document.getElementById('f-motivo-analise').value,
+                        status: 'analise'
+                    };
+                } else if (currentModalType === 'inventario') {
+                    const nome = document.getElementById('f-nome-inventario').value.trim();
+                    if (!nome) {
+                        showAlert('Nome é obrigatório', 'error');
+                        return;
+                    }
+
+                    data = {
+                        ...data,
+                        nome: nome,
+                        tipo: document.getElementById('f-tipo-inventario').value,
+                        status: document.getElementById('f-status-inventario').value
+                    };
+                }
+
+                // Salvar no Firestore
+                db.collection('items').add(data)
+                    .then(() => {
+                        showAlert('✅ Salvo com sucesso!', 'success');
+                        setTimeout(() => {
+                            closeModal();
+                            loadData();
+                        }, 1500);
+                    })
+                    .catch(err => {
+                        console.error('Erro ao salvar:', err);
+                        showAlert('❌ Erro ao salvar: ' + err.message, 'error');
+                    });
+
+            } catch (err) {
+                console.error('Erro:', err);
+                showAlert('❌ Erro: ' + err.message, 'error');
+            }
+        }
+
+        function showAlert(msg, type) {
+            const alertEl = document.getElementById('alert-msg');
+            alertEl.textContent = msg;
+            alertEl.className = 'alert alert-' + type;
+            alertEl.style.display = 'block';
+        }
+
+        // ===== CARREGAR DADOS =====
+        function loadData() {
+            db.collection('items').onSnapshot(snapshot => {
+                allData = [];
+                document.querySelectorAll('.cards-container').forEach(el => el.innerHTML = '');
+                document.getElementById('inventario-table').innerHTML = '';
+
+                snapshot.forEach(doc => {
+                    const item = doc.data();
+                    const id = doc.id;
+                    allData.push({ id, ...item });
+
+                    if (item.tipo === 'planejamento' || item.tipo === 'analise') {
+                        const card = createCard(item, id);
+                        const container = document.querySelector(`[data-status="${item.status}"] .cards-container`);
+                        if (container) container.appendChild(card);
+                    } else if (item.tipo === 'inventario') {
+                        const row = createTableRow(item, id);
+                        document.getElementById('inventario-table').appendChild(row);
+                    }
+                });
+            });
+        }
+
+        function createCard(item, id) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.draggable = true;
+            card.id = id;
+
+            let validacao = '';
+            if (item.validacao && item.validacao.length > 0) {
+                validacao = `<div style="font-size: 11px; color: #64748b; margin-top: 8px;">✓ ${item.validacao.join(', ')}</div>`;
+            }
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div style="flex: 1;">
+                        <h4 style="font-weight: 600; font-size: 14px; margin-bottom: 4px; color: #1e293b;">${item.titulo || item.campanha || ''}</h4>
+                        <p style="font-size: 12px; color: #64748b; margin-bottom: 4px;">${item.responsavel || item.canal || ''}</p>
+                        ${validacao}
+                    </div>
+                    <button onclick="deleteItem('${id}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px;">×</button>
+                </div>
+            `;
+
+            card.ondragstart = (e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', id);
+            };
+
+            return card;
+        }
+
+        function createTableRow(item, id) {
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid #e2e8f0';
+            row.innerHTML = `
+                <td style="padding: 12px; font-size: 14px; color: #1e293b;">${item.nome}</td>
+                <td style="padding: 12px; font-size: 14px; color: #64748b;">${item.tipo}</td>
+                <td style="padding: 12px;">
+                    <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: ${item.status === 'Ativo' ? '#d1fae5' : item.status === 'Pausado' ? '#fef3c7' : '#f3f4f6'}; color: ${item.status === 'Ativo' ? '#065f46' : item.status === 'Pausado' ? '#92400e' : '#374151'};">
+                        ${item.status}
+                    </span>
+                </td>
+                <td style="padding: 12px; text-align: center;">
+                    <button onclick="deleteItem('${id}')" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Deletar</button>
+                </td>
+            `;
+            return row;
+        }
+
+        async function deleteItem(id) {
+            if (confirm('Tem certeza que deseja deletar?')) {
+                try {
+                    await db.collection('items').doc(id).delete();
+                } catch (err) {
+                    alert('Erro: ' + err.message);
+                }
+            }
+        }
+
+        // ===== DRAG AND DROP =====
+        function allowDrop(e) { e.preventDefault(); }
+
+        function drop(e) {
+            e.preventDefault();
+            const id = e.dataTransfer.getData('text/plain');
+            const newStatus = e.currentTarget.getAttribute('data-status');
+            db.collection('items').doc(id).update({ status: newStatus }).catch(err => alert('Erro: ' + err.message));
+        }
+
+        // ===== FILTROS AVANÇADOS =====
+        function applyFilters() {
+            const titulo = document.getElementById('filter-titulo').value.toLowerCase();
+            const responsavel = document.getElementById('filter-responsavel').value;
+            const canal = document.getElementById('filter-canal').value;
+
+            document.querySelectorAll('.card').forEach(card => {
+                const cardTitulo = card.querySelector('h4').textContent.toLowerCase();
+                const cardResponsavel = card.querySelector('p').textContent;
+                
+                let show = true;
+                if (titulo && !cardTitulo.includes(titulo)) show = false;
+                if (responsavel && !cardResponsavel.includes(responsavel)) show = false;
+                if (canal && !cardResponsavel.includes(canal)) show = false;
+
+                card.style.display = show ? 'block' : 'none';
+            });
+        }
+
+        function clearFilters() {
+            document.getElementById('filter-titulo').value = '';
+            document.getElementById('filter-responsavel').value = '';
+            document.getElementById('filter-canal').value = '';
+            document.querySelectorAll('.card').forEach(card => card.style.display = 'block');
+        }
+
+        // ===== EXPORTAR CSV =====
+        function exportToCSV() {
+            if (allData.length === 0) {
+                alert('Nenhum dado para exportar');
+                return;
+            }
+
+            let csv = 'Título,Responsável,Canal,Segmento,Oferta,Status,Data Criação\n';
+            allData.forEach(item => {
+                if (item.tipo === 'planejamento') {
+                    const data = item.criado_em.toDate ? new Date(item.criado_em.toDate()).toLocaleDateString() : new Date(item.criado_em).toLocaleDateString();
+                    csv += `"${item.titulo}","${item.responsavel}","${item.canal}","${item.segmento}","${item.oferta}","${item.status}","${data}"\n`;
+                }
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `campanhas_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ===== GRÁFICOS =====
+        function renderCharts() {
+            const statusCount = {};
+            const canalCount = {};
+            const responsavelCount = {};
+
+            allData.forEach(item => {
+                if (item.tipo === 'planejamento') {
+                    statusCount[item.status] = (statusCount[item.status] || 0) + 1;
+                    canalCount[item.canal] = (canalCount[item.canal] || 0) + 1;
+                    responsavelCount[item.responsavel] = (responsavelCount[item.responsavel] || 0) + 1;
+                }
+            });
+
+            // Gráfico de Status
+            if (charts.status) charts.status.destroy();
+            const ctxStatus = document.getElementById('chartStatus').getContext('2d');
+            charts.status = new Chart(ctxStatus, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusCount),
+                    datasets: [{
+                        data: Object.values(statusCount),
+                        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+
+            // Gráfico de Canal
+            if (charts.canal) charts.canal.destroy();
+            const ctxCanal = document.getElementById('chartCanal').getContext('2d');
+            charts.canal = new Chart(ctxCanal, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(canalCount),
+                    datasets: [{
+                        label: 'Campanhas',
+                        data: Object.values(canalCount),
+                        backgroundColor: '#3b82f6'
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+            });
+
+            // Gráfico de Responsável
+            if (charts.responsavel) charts.responsavel.destroy();
+            const ctxResponsavel = document.getElementById('chartResponsavel').getContext('2d');
+            charts.responsavel = new Chart(ctxResponsavel, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(responsavelCount),
+                    datasets: [{
+                        label: 'Campanhas',
+                        data: Object.values(responsavelCount),
+                        backgroundColor: '#10b981'
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
